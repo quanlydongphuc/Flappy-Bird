@@ -2,22 +2,26 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>Flappy Bird Việt Hoá - Độ khó tăng dần</title>
+  <title>Flappy Bird - Chim nhỏ đẹp, vỗ cánh, chớp mắt</title>
   <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
   <style>
-    html, body {height:100%;margin:0;padding:0;background:#8ecfff;font-family:'Segoe UI',Arial,sans-serif;-webkit-user-select:none;user-select:none;overflow:hidden;}
-    body {display:flex;flex-direction:column;align-items:center;}
-    canvas {background:#8ecfff;box-shadow:0 2px 24px #444a;margin-top:30px;border-radius:14px;}
-    #score-box {position:absolute;top:20px;left:50%;transform:translateX(-50%);color:#fff;font-size:2em;text-shadow:2px 2px 6px #256ab0,0 0 3px #333;user-select:none;pointer-events:none;}
-    #highscore {position:absolute;top:62px;left:50%;transform:translateX(-50%);color:#f9f970;font-size:1.1em;text-shadow:1px 1px 3px #333;user-select:none;pointer-events:none;}
-    #start-hint {position:absolute;top:70%;left:50%;transform:translate(-50%,-50%);font-size:1.3em;color:#fff;background:#333a;padding:10px 36px;border-radius:10px;cursor:pointer;display:none;text-shadow:2px 2px 4px #256ab0;z-index:2;}
+    html, body {height:100%;margin:0;padding:0;background:#8ecfff;font-family:'Segoe UI',Arial,sans-serif;overflow:hidden;}
+    body {display:flex;flex-direction:column;align-items:center;justify-content:flex-start;height:100vh;}
+    #game-wrap {position:relative;display:flex;flex-direction:column;align-items:center;width:100vw;max-width:100vw;}
+    canvas {background:#8ecfff;box-shadow:0 2px 32px #444a;border-radius:18px;margin-top:36px;width:96vw;max-width:480px;height:auto;aspect-ratio:2/3;touch-action:manipulation;}
+    #score-box {position:absolute;top:24px;left:50%;transform:translateX(-50%);color:#fff;font-size:2.6em;text-shadow:2px 2px 8px #256ab0, 0 0 3px #333;user-select:none;pointer-events:none;letter-spacing:2px;}
+    #highscore {position:absolute;top:76px;left:50%;transform:translateX(-50%);color:#f9f970;font-size:1.3em;text-shadow:1px 1px 4px #333;user-select:none;pointer-events:none;letter-spacing:1px;}
+    #start-hint {position:absolute;top:66%;left:50%;transform:translate(-50%,-50%);font-size:1.5em;color:#fff;background:#333a;padding:14px 46px;border-radius:14px;cursor:pointer;display:none;text-shadow:2px 2px 8px #256ab0;z-index:2;}
+    @media (max-width:600px){canvas{margin-top:12px;}#score-box{font-size:2em;top:12px;}#highscore{font-size:1em;top:46px;}#start-hint{font-size:1.1em;padding:10px 16px;}}
   </style>
 </head>
 <body>
-  <div id="score-box">0</div>
-  <div id="highscore"></div>
-  <canvas id="game" width="400" height="600"></canvas>
-  <div id="start-hint">Chạm hoặc nhấn SPACE để chơi!</div>
+  <div id="game-wrap">
+    <div id="score-box">0</div>
+    <div id="highscore"></div>
+    <canvas id="game" width="480" height="720"></canvas>
+    <div id="start-hint">Chạm hoặc nhấn SPACE để chơi!</div>
+  </div>
   <audio id="sfx-flap" src="https://cdn.jsdelivr.net/gh/loctvdev/flappy-audio@main/flap.mp3" preload="auto"></audio>
   <audio id="sfx-hit" src="https://cdn.jsdelivr.net/gh/loctvdev/flappy-audio@main/hit.mp3" preload="auto"></audio>
   <audio id="sfx-score" src="https://cdn.jsdelivr.net/gh/loctvdev/flappy-audio@main/score.mp3" preload="auto"></audio>
@@ -27,31 +31,43 @@ const ctx = cvs.getContext('2d');
 const scoreDiv = document.getElementById('score-box');
 const highDiv = document.getElementById('highscore');
 const startDiv = document.getElementById('start-hint');
-
 const SFX_FLAP = document.getElementById('sfx-flap');
 const SFX_HIT = document.getElementById('sfx-hit');
 const SFX_SCORE = document.getElementById('sfx-score');
 
 const BASE_PIPE_WIDTH = 60;
-const BASE_PIPE_GAP = 160;
-const BASE_GRAVITY = 0.42;
-const BASE_SPEED = 2.4;
-const BASE_FLAP = -7.2;
-const GROUND_HEIGHT = 80;
+const BASE_PIPE_GAP = 180;
+const BASE_GRAVITY = 0.44;
+const BASE_SPEED = 2.7;
+const BASE_FLAP = -8.2;
+const GROUND_HEIGHT = 100;
 
 let pipes, bird, score, highscore, gameOver, started, bgOffset;
 let PIPE_WIDTH, PIPE_GAP, GRAVITY, PIPE_SPEED, FLAP;
 
+// Responsive: Tự động set canvas size đúng tỷ lệ nếu nhỏ hơn 480x720
+function resizeCanvas() {
+  let w = Math.min(window.innerWidth, 480);
+  let h = w * 1.5;
+  if(window.innerHeight < h) {
+    h = window.innerHeight;
+    w = h / 1.5;
+  }
+  cvs.style.width = w + "px";
+  cvs.style.height = h + "px";
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
 function getHighscore() {return parseInt(localStorage.getItem("flappy_highscore") || "0");}
 function setHighscore(s) {localStorage.setItem("flappy_highscore", s);}
 function getDifficulty(score) {
-  // Mỗi mốc 50 điểm tăng khó, tối đa đến mốc 300
   let level = Math.floor(score / 50);
   return {
-    PIPE_GAP: Math.max(BASE_PIPE_GAP - level * 16, 80),
-    PIPE_SPEED: BASE_SPEED + level * 0.5,
-    GRAVITY: BASE_GRAVITY + level * 0.06,
-    FLAP: BASE_FLAP - level * 0.1
+    PIPE_GAP: Math.max(BASE_PIPE_GAP - level * 20, 90),
+    PIPE_SPEED: BASE_SPEED + level * 0.6,
+    GRAVITY: BASE_GRAVITY + level * 0.07,
+    FLAP: BASE_FLAP - level * 0.13
   };
 }
 function applyDifficulty(s) {
@@ -64,7 +80,15 @@ function applyDifficulty(s) {
 function reset() {
   pipes = [];
   score = 0;
-  bird = {x:80,y:cvs.height/2-30,vy:0,w:42,h:32,anim:0};
+  bird = {
+    x: 100, y: cvs.height/2 - 18, vy: 0,
+    w: 34, h: 26, anim: 0, // Chim nhỏ lại
+    wingPhase: 0,
+    eyeBlink: 0,
+    blinkTimer: Math.random()*100 + 100,
+    isBlinking: false,
+    dead: false
+  };
   gameOver = false; started = false; bgOffset = 0;
   scoreDiv.innerText = score; highscore = getHighscore();
   highDiv.innerText = "Kỷ lục: " + highscore;
@@ -77,107 +101,220 @@ function drawBackground() {
   ctx.save();ctx.globalAlpha=0.67;ctx.fillStyle="#90b8d2";
   ctx.beginPath();
   ctx.moveTo(-80+bgOffset*0.2,cvs.height-GROUND_HEIGHT-70);
-  ctx.lineTo(90+bgOffset*0.2,cvs.height-GROUND_HEIGHT-220);
-  ctx.lineTo(230+bgOffset*0.2,cvs.height-GROUND_HEIGHT-110);
-  ctx.lineTo(370+bgOffset*0.2,cvs.height-GROUND_HEIGHT-200);
-  ctx.lineTo(500+bgOffset*0.2,cvs.height-GROUND_HEIGHT-70);
+  ctx.lineTo(120+bgOffset*0.2,cvs.height-GROUND_HEIGHT-240);
+  ctx.lineTo(310+bgOffset*0.2,cvs.height-GROUND_HEIGHT-120);
+  ctx.lineTo(470+bgOffset*0.2,cvs.height-GROUND_HEIGHT-210);
+  ctx.lineTo(650+bgOffset*0.2,cvs.height-GROUND_HEIGHT-70);
   ctx.lineTo(cvs.width,cvs.height-GROUND_HEIGHT-70);
   ctx.lineTo(cvs.width,cvs.height);ctx.lineTo(0,cvs.height);ctx.closePath();
   ctx.fill();ctx.globalAlpha=1;
-  for(let i=0;i<3;++i){
-    let x=((i*160+bgOffset*0.5)%(cvs.width+100))-50;
+  for(let i=0;i<4;++i){
+    let x=((i*220+bgOffset*0.5)%(cvs.width+120))-60;
     ctx.save();ctx.globalAlpha=0.85;ctx.fillStyle="#fff";
     ctx.beginPath();
-    ctx.ellipse(x,70+i*22,42,17,0,0,Math.PI*2);
-    ctx.ellipse(x+30,80+i*22,28,11,0,0,Math.PI*2);
-    ctx.ellipse(x-24,82+i*22,16,8,0,0,Math.PI*2);
+    ctx.ellipse(x,90+i*28,62,23,0,0,Math.PI*2);
+    ctx.ellipse(x+46,104+i*28,40,16,0,0,Math.PI*2);
+    ctx.ellipse(x-32,112+i*28,22,10,0,0,Math.PI*2);
     ctx.fill();ctx.restore();
   }
   ctx.restore();
   ctx.fillStyle="#6c913b";
   ctx.fillRect(0,cvs.height-GROUND_HEIGHT,cvs.width,GROUND_HEIGHT);
-  for(let i=0;i<Math.ceil(cvs.width/40);++i){
+  for(let i=0;i<Math.ceil(cvs.width/52);++i){
     ctx.fillStyle="#b7d663";
     ctx.beginPath();
-    ctx.ellipse(i*40+20+bgOffset%40,cvs.height-GROUND_HEIGHT+12,18,8,0,0,Math.PI*2);
+    ctx.ellipse(i*52+26+bgOffset%52,cvs.height-GROUND_HEIGHT+18,22,10,0,0,Math.PI*2);
     ctx.fill();
   }
 }
 function drawPipe(pipe) {
   let {x,top,color}=pipe;
   ctx.save();ctx.fillStyle=color;ctx.fillRect(x,0,BASE_PIPE_WIDTH,top);
-  ctx.fillStyle="#c2f0ff";ctx.fillRect(x-4,top-24,BASE_PIPE_WIDTH+8,24);
-  ctx.strokeStyle="#218dc3";ctx.lineWidth=2;
-  ctx.strokeRect(x-4,top-24,BASE_PIPE_WIDTH+8,24);ctx.strokeRect(x,0,BASE_PIPE_WIDTH,top);
+  ctx.fillStyle="#c2f0ff";ctx.fillRect(x-4,top-32,BASE_PIPE_WIDTH+8,32);
+  ctx.strokeStyle="#218dc3";ctx.lineWidth=2.2;
+  ctx.strokeRect(x-4,top-32,BASE_PIPE_WIDTH+8,32);ctx.strokeRect(x,0,BASE_PIPE_WIDTH,top);
   ctx.restore();
   let by=top+PIPE_GAP;
   ctx.save();ctx.fillStyle=color;ctx.fillRect(x,by,BASE_PIPE_WIDTH,cvs.height-GROUND_HEIGHT-by);
-  ctx.fillStyle="#c2f0ff";ctx.fillRect(x-4,by,BASE_PIPE_WIDTH+8,24);
-  ctx.strokeStyle="#218dc3";ctx.lineWidth=2;
-  ctx.strokeRect(x-4,by,BASE_PIPE_WIDTH+8,24);ctx.strokeRect(x,by,BASE_PIPE_WIDTH,cvs.height-GROUND_HEIGHT-by);
+  ctx.fillStyle="#c2f0ff";ctx.fillRect(x-4,by,BASE_PIPE_WIDTH+8,32);
+  ctx.strokeStyle="#218dc3";ctx.lineWidth=2.2;
+  ctx.strokeRect(x-4,by,BASE_PIPE_WIDTH+8,32);ctx.strokeRect(x,by,BASE_PIPE_WIDTH,cvs.height-GROUND_HEIGHT-by);
   ctx.restore();
 }
 function drawPipes() {pipes.forEach(drawPipe);}
+
+// Chim nhỏ gọn, rõ ràng
 function drawBird() {
-  let {x,y,w,h,anim}=bird;
+  let {x, y, w, h, anim, wingPhase, isBlinking, dead} = bird;
+
   ctx.save();
-  ctx.translate(x+w/2,y+h/2);
-  ctx.rotate(Math.min(bird.vy/16,Math.PI/6));
-  ctx.fillStyle="#ffe066";
-  ctx.beginPath();
-  ctx.ellipse(0,0,w/2,h/2,0,0,Math.PI*2);ctx.fill();
-  ctx.fillStyle="#fff7ad";
-  ctx.beginPath();
-  ctx.ellipse(8,10,w/5,h/6,0,0,Math.PI*2);ctx.fill();
+  ctx.translate(x + w/2, y + h/2);
+  ctx.rotate(Math.max(Math.min(bird.vy/19,Math.PI/7),-Math.PI/10));
+  
+  // Đuôi nhỏ
   ctx.save();
-  ctx.rotate(Math.sin(anim/5)*0.27);
-  ctx.fillStyle="#f1b64a";
+  ctx.rotate(Math.sin(anim/8)*0.2 - (dead ? 0.1 : 0));
   ctx.beginPath();
-  ctx.ellipse(-8,6,w/5,h/6,0,0,Math.PI*2);ctx.fill();
+  ctx.moveTo(-w/2+2, 6);
+  ctx.lineTo(-w/2-6, 12);
+  ctx.lineTo(-w/2+7, -2);
+  ctx.closePath();
+  ctx.fillStyle="#e39847";
+  ctx.fill();
   ctx.restore();
-  ctx.fillStyle="#fff";
+
+  // Thân tròn
+  ctx.fillStyle="#ffd700";
   ctx.beginPath();
-  ctx.arc(10,-8,6,0,Math.PI*2);ctx.fill();
-  ctx.fillStyle="#222";
+  ctx.ellipse(0, 0, w/2, h/2, 0, 0, Math.PI*2);
+  ctx.fill();
+  // Bụng trắng
+  ctx.fillStyle="#fffde7";
   ctx.beginPath();
-  ctx.arc(12,-7,2.4,0,Math.PI*2);ctx.fill();
+  ctx.ellipse(6, 8, 9, 7, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // Cánh nhỏ (vỗ cánh)
+  ctx.save();
+  let wingAngle = dead ? 0.5 : Math.sin(wingPhase)*0.7 - 0.25;
+  ctx.rotate(wingAngle);
+  ctx.beginPath();
+  ctx.moveTo(-8, 5);
+  ctx.quadraticCurveTo(-18, 10, -10, 15);
+  ctx.quadraticCurveTo(-2, 12, -8, 5);
+  ctx.closePath();
+  ctx.fillStyle="#f7b731";
+  ctx.shadowColor = "#c68419";
+  ctx.shadowBlur = 3;
+  ctx.fill();
+  ctx.restore();
+
+  // Đầu nhỏ
+  ctx.save();
+  ctx.translate(13, -7);
+  ctx.rotate(-0.07);
+  ctx.beginPath();
+  ctx.arc(0, 0, 9, 0, Math.PI*2);
+  ctx.fillStyle="#ffec99";
+  ctx.fill();
+  ctx.restore();
+
+  // Mỏ
+  ctx.save();
+  ctx.translate(21, -4);
+  ctx.rotate(0.16);
+  ctx.beginPath();
+  ctx.moveTo(0,0);
+  ctx.lineTo(7, -3);
+  ctx.lineTo(4, 5);
+  ctx.closePath();
   ctx.fillStyle="#ffa234";
+  ctx.fill();
+  ctx.restore();
+
+  // Má hồng
+  ctx.save();
+  ctx.translate(15,2);
   ctx.beginPath();
-  ctx.moveTo(w/2-2,-1);ctx.lineTo(w/2+9,2);ctx.lineTo(w/2-2,7);ctx.closePath();ctx.fill();
+  ctx.arc(0,0,1.4,0,Math.PI*2);
+  ctx.fillStyle="#fb7d7d";
+  ctx.globalAlpha = 0.55;
+  ctx.fill();
+  ctx.restore();
+
+  // Mắt
+  ctx.save();
+  ctx.translate(16, -7);
+  if (dead) {
+    ctx.strokeStyle="#a22";
+    ctx.lineWidth=1.5;
+    ctx.beginPath();
+    ctx.moveTo(-3,-3); ctx.lineTo(3,3);
+    ctx.moveTo(-3,3); ctx.lineTo(3,-3);
+    ctx.stroke();
+  } else if (isBlinking) {
+    ctx.strokeStyle="#222";
+    ctx.lineWidth=1.5;
+    ctx.beginPath();
+    ctx.moveTo(-2,0); ctx.lineTo(2,0);
+    ctx.stroke();
+  } else {
+    ctx.beginPath();
+    ctx.arc(0, 0, 2.1, 0, Math.PI*2);
+    ctx.fillStyle="#222";
+    ctx.shadowColor = "#fff";
+    ctx.shadowBlur = 1.2;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(-0.6,-0.6,0.5,0,Math.PI*2);
+    ctx.fillStyle="#fff";
+    ctx.globalAlpha=0.7;
+    ctx.fill();
+  }
+  ctx.restore();
+
   ctx.restore();
 }
+
 function addPipe() {
-  let minTop=50,maxTop=cvs.height-GROUND_HEIGHT-PIPE_GAP-80;
+  let minTop=60,maxTop=cvs.height-GROUND_HEIGHT-PIPE_GAP-120;
   let top=Math.floor(Math.random()*(maxTop-minTop))+minTop;
   let color="#29b6f6";
   pipes.push({x:cvs.width+10,top,color,passed:false});
 }
+
 function update() {
   if(!started)return;
-  bgOffset+=1.4; bird.anim++; bird.vy+=GRAVITY; bird.y+=bird.vy;
-  if(pipes.length===0||pipes[pipes.length-1].x<cvs.width-190)addPipe();
+  bgOffset+=1.9; bird.anim++; bird.vy+=GRAVITY; bird.y+=bird.vy;
+
+  // Animation vỗ cánh
+  if (!bird.dead) bird.wingPhase += 0.23 + Math.abs(bird.vy/13);
+  // Animation chớp mắt
+  if (!bird.dead) {
+    if (bird.isBlinking) {
+      bird.eyeBlink++;
+      if (bird.eyeBlink > 7) {
+        bird.isBlinking = false;
+        bird.eyeBlink = 0;
+        bird.blinkTimer = 120 + Math.random()*80;
+      }
+    } else {
+      bird.blinkTimer--;
+      if (bird.blinkTimer <= 0) {
+        bird.isBlinking = true;
+        bird.eyeBlink = 0;
+      }
+    }
+  }
+
+  if(pipes.length===0||pipes[pipes.length-1].x<cvs.width-240)addPipe();
   pipes.forEach((p)=>p.x-=PIPE_SPEED);
-  pipes=pipes.filter(p=>p.x>-BASE_PIPE_WIDTH-12);
+  pipes=pipes.filter(p=>p.x>-BASE_PIPE_WIDTH-14);
   for(let p of pipes){
     let bx=bird.x,by=bird.y,bw=bird.w,bh=bird.h;
     if(bx+bw>p.x&&bx<p.x+BASE_PIPE_WIDTH&&by<p.top){
-      gameOver=true;started=false;playSound(SFX_HIT);
+      gameOver=true;started=false;
+      bird.dead = true;
+      playSound(SFX_HIT);
       setTimeout(()=>{startDiv.innerText=`GAME OVER!\nĐiểm: ${score}\nBấm/chạm để chơi lại`;startDiv.style.display="block";},250);
     }
-    if(bx+bw>p.x&&bx<p.x+BASE_PIPE_WIDTH&&by+bh>p.top+PIPE_GAP&&by+bh<cvs.height-GROUND_HEIGHT+5){
-      gameOver=true;started=false;playSound(SFX_HIT);
+    if(bx+bw>p.x&&bx<p.x+BASE_PIPE_WIDTH&&by+bh>p.top+PIPE_GAP&&by+bh<cvs.height-GROUND_HEIGHT+7){
+      gameOver=true;started=false;
+      bird.dead = true;
+      playSound(SFX_HIT);
       setTimeout(()=>{startDiv.innerText=`GAME OVER!\nĐiểm: ${score}\nBấm/chạm để chơi lại`;startDiv.style.display="block";},250);
     }
     if(!p.passed&&p.x+BASE_PIPE_WIDTH<bird.x){
       p.passed=true;score++;scoreDiv.innerText=score;
       playSound(SFX_SCORE);
       if(score>highscore){highscore=score;setHighscore(score);highDiv.innerText="Kỷ lục: "+highscore;}
-      // Mỗi khi tăng điểm, kiểm tra và cập nhật độ khó
       applyDifficulty(score);
     }
   }
   if(bird.y+bird.h>cvs.height-GROUND_HEIGHT){
-    bird.y=cvs.height-GROUND_HEIGHT-bird.h;bird.vy=0;gameOver=true;started=false;playSound(SFX_HIT);
+    bird.y=cvs.height-GROUND_HEIGHT-bird.h;bird.vy=0;gameOver=true;started=false;
+    bird.dead = true;
+    playSound(SFX_HIT);
     setTimeout(()=>{startDiv.innerText=`GAME OVER!\nĐiểm: ${score}\nBấm/chạm để chơi lại`;startDiv.style.display="block";},250);
   }
   if(bird.y<0){bird.y=0;bird.vy=0.4;}
@@ -193,7 +330,8 @@ function playSound(audio) {
 }
 function flap() {
   if(!started){started=true;startDiv.style.display="none";pipes=[];
-    bird.y=cvs.height/2-30;bird.vy=0;score=0;scoreDiv.innerText=score;bgOffset=0;gameOver=false;
+    bird.y=cvs.height/2-18;bird.vy=0;score=0;scoreDiv.innerText=score;bgOffset=0;gameOver=false;
+    bird.dead=false;bird.wingPhase=0;bird.isBlinking=false;bird.eyeBlink=0;bird.blinkTimer=100+Math.random()*100;
     applyDifficulty(0);
     playSound(SFX_FLAP);
     return;
