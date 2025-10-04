@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>Flappy Bird - Chim nhỏ đẹp, vỗ cánh, chớp mắt</title>
+  <title>Flappy Bird - Chọn tốc độ linh hoạt</title>
   <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
   <style>
     html, body {height:100%;margin:0;padding:0;background:#8ecfff;font-family:'Segoe UI',Arial,sans-serif;overflow:hidden;}
@@ -12,10 +12,27 @@
     #score-box {position:absolute;top:24px;left:50%;transform:translateX(-50%);color:#fff;font-size:2.6em;text-shadow:2px 2px 8px #256ab0, 0 0 3px #333;user-select:none;pointer-events:none;letter-spacing:2px;}
     #highscore {position:absolute;top:76px;left:50%;transform:translateX(-50%);color:#f9f970;font-size:1.3em;text-shadow:1px 1px 4px #333;user-select:none;pointer-events:none;letter-spacing:1px;}
     #start-hint {position:absolute;top:66%;left:50%;transform:translate(-50%,-50%);font-size:1.5em;color:#fff;background:#333a;padding:14px 46px;border-radius:14px;cursor:pointer;display:none;text-shadow:2px 2px 8px #256ab0;z-index:2;}
-    @media (max-width:600px){canvas{margin-top:12px;}#score-box{font-size:2em;top:12px;}#highscore{font-size:1em;top:46px;}#start-hint{font-size:1.1em;padding:10px 16px;}}
+    #speed-select-wrap {width:100vw;max-width:480px;margin-top:16px;margin-bottom:0;display:flex;flex-direction:column;align-items:center;}
+    #speed-label {font-size:1.15em;color:#256ab0;margin-bottom:2px;}
+    #speed-slider {width:85%;max-width:340px;}
+    #speed-value {margin-top:2px;font-size:1.08em;color:#256ab0;}
+    #speed-text {display:flex;flex-direction:row;justify-content:space-between;width:85%;max-width:340px;font-size:1em;color:#256ab0;}
+    @media (max-width:600px){
+      canvas{margin-top:12px;}
+      #score-box{font-size:2em;top:12px;}
+      #highscore{font-size:1em;top:46px;}
+      #start-hint{font-size:1.1em;padding:10px 16px;}
+      #speed-slider,#speed-text{width:98%;}
+    }
   </style>
 </head>
 <body>
+  <div id="speed-select-wrap">
+    <div id="speed-label">Chọn tốc độ:</div>
+    <input type="range" min="0.5" max="2" step="0.01" value="1" id="speed-slider" />
+    <div id="speed-text"><span>Chậm</span><span>Bình thường</span><span>Nhanh</span></div>
+    <div id="speed-value">Tốc độ: 1.00x</div>
+  </div>
   <div id="game-wrap">
     <div id="score-box">0</div>
     <div id="highscore"></div>
@@ -34,6 +51,9 @@ const startDiv = document.getElementById('start-hint');
 const SFX_FLAP = document.getElementById('sfx-flap');
 const SFX_HIT = document.getElementById('sfx-hit');
 const SFX_SCORE = document.getElementById('sfx-score');
+const speedSlider = document.getElementById('speed-slider');
+const speedValue = document.getElementById('speed-value');
+const speedSelectWrap = document.getElementById('speed-select-wrap');
 
 const BASE_PIPE_WIDTH = 60;
 const BASE_PIPE_GAP = 180;
@@ -44,8 +64,9 @@ const GROUND_HEIGHT = 100;
 
 let pipes, bird, score, highscore, gameOver, started, bgOffset;
 let PIPE_WIDTH, PIPE_GAP, GRAVITY, PIPE_SPEED, FLAP;
+let globalSpeedFactor = 1; // Giá trị liên tục 0.5 - 2
 
-// Responsive: Tự động set canvas size đúng tỷ lệ nếu nhỏ hơn 480x720
+// Responsive
 function resizeCanvas() {
   let w = Math.min(window.innerWidth, 480);
   let h = w * 1.5;
@@ -63,11 +84,12 @@ function getHighscore() {return parseInt(localStorage.getItem("flappy_highscore"
 function setHighscore(s) {localStorage.setItem("flappy_highscore", s);}
 function getDifficulty(score) {
   let level = Math.floor(score / 50);
+  // Độ khó vẫn tăng, nhưng theo hệ số tốc độ toàn cục
   return {
     PIPE_GAP: Math.max(BASE_PIPE_GAP - level * 20, 90),
-    PIPE_SPEED: BASE_SPEED + level * 0.6,
-    GRAVITY: BASE_GRAVITY + level * 0.07,
-    FLAP: BASE_FLAP - level * 0.13
+    PIPE_SPEED: (BASE_SPEED + level * 0.6) * globalSpeedFactor,
+    GRAVITY: (BASE_GRAVITY + level * 0.07) * globalSpeedFactor,
+    FLAP: (BASE_FLAP - level * 0.13) * Math.sqrt(globalSpeedFactor)
   };
 }
 function applyDifficulty(s) {
@@ -82,7 +104,7 @@ function reset() {
   score = 0;
   bird = {
     x: 100, y: cvs.height/2 - 18, vy: 0,
-    w: 34, h: 26, anim: 0, // Chim nhỏ lại
+    w: 34, h: 26, anim: 0,
     wingPhase: 0,
     eyeBlink: 0,
     blinkTimer: Math.random()*100 + 100,
@@ -94,6 +116,7 @@ function reset() {
   highDiv.innerText = "Kỷ lục: " + highscore;
   startDiv.innerText = "Chạm hoặc nhấn SPACE để chơi!";
   startDiv.style.display = "block";
+  speedSelectWrap.style.display = "flex";
   applyDifficulty(0);
 }
 function drawBackground() {
@@ -142,8 +165,6 @@ function drawPipe(pipe) {
   ctx.restore();
 }
 function drawPipes() {pipes.forEach(drawPipe);}
-
-// Chim nhỏ gọn, rõ ràng
 function drawBird() {
   let {x, y, w, h, anim, wingPhase, isBlinking, dead} = bird;
 
@@ -265,7 +286,7 @@ function addPipe() {
 
 function update() {
   if(!started)return;
-  bgOffset+=1.9; bird.anim++; bird.vy+=GRAVITY; bird.y+=bird.vy;
+  bgOffset+=1.9 * globalSpeedFactor; bird.anim++; bird.vy+=GRAVITY; bird.y+=bird.vy;
 
   // Animation vỗ cánh
   if (!bird.dead) bird.wingPhase += 0.23 + Math.abs(bird.vy/13);
@@ -296,13 +317,13 @@ function update() {
       gameOver=true;started=false;
       bird.dead = true;
       playSound(SFX_HIT);
-      setTimeout(()=>{startDiv.innerText=`GAME OVER!\nĐiểm: ${score}\nBấm/chạm để chơi lại`;startDiv.style.display="block";},250);
+      setTimeout(()=>{startDiv.innerText=`GAME OVER!\nĐiểm: ${score}\nBấm/chạm để chơi lại`;startDiv.style.display="block";speedSelectWrap.style.display="flex";},250);
     }
     if(bx+bw>p.x&&bx<p.x+BASE_PIPE_WIDTH&&by+bh>p.top+PIPE_GAP&&by+bh<cvs.height-GROUND_HEIGHT+7){
       gameOver=true;started=false;
       bird.dead = true;
       playSound(SFX_HIT);
-      setTimeout(()=>{startDiv.innerText=`GAME OVER!\nĐiểm: ${score}\nBấm/chạm để chơi lại`;startDiv.style.display="block";},250);
+      setTimeout(()=>{startDiv.innerText=`GAME OVER!\nĐiểm: ${score}\nBấm/chạm để chơi lại`;startDiv.style.display="block";speedSelectWrap.style.display="flex";},250);
     }
     if(!p.passed&&p.x+BASE_PIPE_WIDTH<bird.x){
       p.passed=true;score++;scoreDiv.innerText=score;
@@ -315,7 +336,7 @@ function update() {
     bird.y=cvs.height-GROUND_HEIGHT-bird.h;bird.vy=0;gameOver=true;started=false;
     bird.dead = true;
     playSound(SFX_HIT);
-    setTimeout(()=>{startDiv.innerText=`GAME OVER!\nĐiểm: ${score}\nBấm/chạm để chơi lại`;startDiv.style.display="block";},250);
+    setTimeout(()=>{startDiv.innerText=`GAME OVER!\nĐiểm: ${score}\nBấm/chạm để chơi lại`;startDiv.style.display="block";speedSelectWrap.style.display="flex";},250);
   }
   if(bird.y<0){bird.y=0;bird.vy=0.4;}
 }
@@ -329,9 +350,14 @@ function playSound(audio) {
   } catch(e){}
 }
 function flap() {
-  if(!started){started=true;startDiv.style.display="none";pipes=[];
+  if(!started){
+    started=true;startDiv.style.display="none";pipes=[];
     bird.y=cvs.height/2-18;bird.vy=0;score=0;scoreDiv.innerText=score;bgOffset=0;gameOver=false;
     bird.dead=false;bird.wingPhase=0;bird.isBlinking=false;bird.eyeBlink=0;bird.blinkTimer=100+Math.random()*100;
+    // Khi bắt đầu mới, ẩn thanh trượt tốc độ
+    speedSelectWrap.style.display = "none";
+    // Lấy tốc độ từ slider
+    globalSpeedFactor = parseFloat(speedSlider.value);
     applyDifficulty(0);
     playSound(SFX_FLAP);
     return;
@@ -344,6 +370,13 @@ document.addEventListener('keydown',e=>{if(e.code==='Space'||e.key===' '){e.prev
 cvs.addEventListener('mousedown',flap);startDiv.addEventListener('mousedown',flap);
 cvs.addEventListener('touchstart',function(e){e.preventDefault();flap();},{passive:false});
 startDiv.addEventListener('touchstart',function(e){e.preventDefault();flap();},{passive:false});
+
+// Hiển thị giá trị tốc độ hiện tại
+speedSlider.addEventListener('input', function() {
+  globalSpeedFactor = parseFloat(speedSlider.value);
+  speedValue.textContent = "Tốc độ: " + globalSpeedFactor.toFixed(2) + "x";
+  applyDifficulty(score||0);
+});
 
 reset();
 gameLoop();
